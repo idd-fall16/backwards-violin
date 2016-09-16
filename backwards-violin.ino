@@ -20,8 +20,8 @@ SYSTEM_MODE(MANUAL);
 #define SP_PIN A1
 #define FS_PIN A0
 
+#define CHANNEL 1
 
-int channel = 1;
 
 int old_pitch = -2;
 int old_volume = -2;
@@ -29,6 +29,7 @@ int old_accel = -2;
 int new_pitch = -1;
 int new_volume = -1;
 int new_accel = -1;
+byte program = 1;
 
 int i=0;
 
@@ -40,13 +41,7 @@ Adafruit_LIS3DH lis = Adafruit_LIS3DH();
 
 void setup() {
   Serial.begin(115200);
-
-  if (! lis.begin(0x18)) {   // change this to 0x19 for alternative i2c address
-    Serial.println("Couldnt start");
-    while (1);
-  }
-  Serial.println("LIS3DH found!");
-  
+  lis.begin(0x18);   // change this to 0x19 for alternative i2c address
   lis.setRange(LIS3DH_RANGE_2_G);   // 2, 4, 8 or 16 G!
 }
 
@@ -55,10 +50,11 @@ void setup() {
  */
 int read_from_softpot() {
   int valSP = analogRead(SP_PIN)/580;
-  Serial.print("\t Potentiometer: ");
-  Serial.println(valSP); 
- 
-  return valSP;
+//  Serial.print("\t Potentiometer: ");
+//  Serial.println(valSP); 
+
+ return i%8;
+//  return valSP;
 }
 
 /*
@@ -66,10 +62,11 @@ int read_from_softpot() {
  */
 int read_from_force() {
   int valFS = analogRead(FS_PIN)/32;
-  Serial.print("Force: ");
-  Serial.print(valFS); 
+//  Serial.print("Force: ");
+//  Serial.print(valFS); 
 
-  return valFS;
+  return i%5 * 30;
+//  return valFS;
 }
 
 /*
@@ -82,10 +79,13 @@ void read_from_accel() {
   accX = abs(event.acceleration.x)/7;
   accY = abs(event.acceleration.y)/7;
   accZ = abs(event.acceleration.z)/7;
-  Serial.print("X: "); Serial.print(accX);
-  Serial.print("\tY: "); Serial.print(accY); 
-  Serial.print("\tZ: "); Serial.print(accZ); 
-  Serial.print(" m/s^2 ");
+//  Serial.print("X: "); Serial.print(accX);
+//  Serial.print("\tY: "); Serial.print(accY); 
+//  Serial.print("\tZ: "); Serial.print(accZ); 
+//  Serial.print(" m/s^2 ");
+
+
+  accZ = i%2 * 11;
 }
 
 
@@ -145,6 +145,14 @@ int force_to_volume() {
   }    
 }
 
+int accel_to_indicator() {
+  if (accZ < 9) {
+    return -1;
+  } else if (accZ > 10) {
+    return 1;
+  }
+}
+
 /*
  * check all relevant dimensions for change
  */
@@ -156,12 +164,7 @@ bool volume_changed() {
   return new_volume != old_volume;
 }
 
-bool accel_changed() {
-  if (accZ < 9) {
-    new_accel = -1;
-  } else if (accZ > 10) {
-    new_accel = 1;
-  } 
+bool accel_changed() { 
   return new_accel != old_accel;
 }
 
@@ -176,31 +179,40 @@ void send_midi_commands() {
   old_volume = new_volume;
   new_volume = force_to_volume(); 
 
+  old_accel = new_accel;
+  new_accel = accel_to_indicator();
+
   if (accel_changed()) {
-    midi_note_off(channel,old_pitch,127);
-    midi_note_off(channel,new_pitch,127);
-    channel = (channel + 1) % 2 + 1;
-    midi_note_on(channel,new_pitch,new_volume);
+    if (new_accel = -1) {
+      program = 1;
+    } else {
+      program = 41;
+    }
+    midi_program_change(CHANNEL, program);
   }
   
   if (pitch_changed()) {
-      midi_note_off(channel,old_pitch,127);
-      midi_note_on(channel,new_pitch,new_volume);
+      midi_note_off(CHANNEL,new_pitch,127);
+      midi_note_on(CHANNEL,new_pitch,new_volume);
   }
 
   if (volume_changed()) {
       //turn it off
       if (new_volume == 0) {
-        midi_note_off(channel,new_pitch,127); 
+        midi_note_off(CHANNEL,old_pitch,127); 
+        midi_note_off(CHANNEL,new_pitch,127); 
       } else {
         //adjust volume
-        midi_note_off(channel,new_pitch,127);
-        midi_note_on(channel,new_pitch,new_volume);
+        midi_note_off(CHANNEL,old_pitch,127); 
+        midi_note_off(CHANNEL,new_pitch,127);
+        midi_note_on(CHANNEL,new_pitch,new_volume);
       }
   }
-  delay(10); //response sensitivity
 }
 
 void loop() {
+  i++;
   send_midi_commands();
+//  Serial.println("sent commands");
+  delay(1000); //response sensitivity
 }
