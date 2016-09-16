@@ -12,7 +12,7 @@ SYSTEM_MODE(MANUAL);
 
 
 #include "ardumidi.h"
-#include <Adafruit_LIS3DH.h>
+#include "Adafruit_LIS3DH.h"
 #include "Adafruit_Sensor.h"
 
 #define OFF_THRESHOLD 5
