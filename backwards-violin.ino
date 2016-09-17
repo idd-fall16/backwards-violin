@@ -22,6 +22,7 @@ SYSTEM_MODE(MANUAL);
 
 #define CHANNEL 1
 
+#define POT_THRESH 10
 
 int old_pitch = -2;
 int old_volume = -2;
@@ -34,6 +35,11 @@ byte program = 1;
 int i=0;
 
 int accX=0, accY=0, accZ=0;
+
+int pot[POT_THRESH];
+int pot_index = 0;
+
+int pitch_bend = 8192;
 
 // I2C
 Adafruit_LIS3DH lis = Adafruit_LIS3DH();
@@ -50,11 +56,11 @@ void setup() {
  */
 int read_from_softpot() {
   int valSP = analogRead(SP_PIN)/580;
-//  Serial.print("\t Potentiometer: ");
-//  Serial.println(valSP); 
+  Serial.print("\t Potentiometer: ");
+  Serial.println(valSP); 
 
- return i%8;
-//  return valSP;
+// return i%8;
+  return valSP;
 }
 
 /*
@@ -62,30 +68,29 @@ int read_from_softpot() {
  */
 int read_from_force() {
   int valFS = analogRead(FS_PIN)/32;
-//  Serial.print("Force: ");
-//  Serial.print(valFS); 
+  Serial.print("Force: ");
+  Serial.println(valFS); 
 
-  return i%5 * 30;
-//  return valFS;
+//  return 127;
+//  return i%5 * 30;
+  return valFS;
 }
 
 /*
- * 
+ * (0, 1)
  */
 void read_from_accel() {
   lis.read();      // get X Y and Z data at once
   sensors_event_t event; 
   lis.getEvent(&event);
-  accX = abs(event.acceleration.x)/7;
-  accY = abs(event.acceleration.y)/7;
-  accZ = abs(event.acceleration.z)/7;
+  accX = event.acceleration.x/7;
+//  accY = abs(event.acceleration.y)/7;
+//  accZ = abs(event.acceleration.z)/7;
 //  Serial.print("X: "); Serial.print(accX);
 //  Serial.print("\tY: "); Serial.print(accY); 
-//  Serial.print("\tZ: "); Serial.print(accZ); 
+//  Serial.println("Z: "); Serial.println(accZ); 
 //  Serial.print(" m/s^2 ");
-
-
-  accZ = i%2 * 11;
+//  accZ = i%2 * 11;
 }
 
 
@@ -128,12 +133,14 @@ int softpot_to_pitch() {
   }
  
   return note;
+//  return MIDI_C;
 }
 
 /*
  * turn reading into a valid midi volume signature
  */
 int force_to_volume() {
+
   //read from sensor
   int force = read_from_force();
   if (force < OFF_THRESHOLD) {
@@ -146,11 +153,8 @@ int force_to_volume() {
 }
 
 int accel_to_indicator() {
-  if (accZ < 9) {
-    return -1;
-  } else if (accZ > 10) {
-    return 1;
-  }
+  read_from_accel();
+  return accX;
 }
 
 /*
@@ -161,7 +165,7 @@ bool pitch_changed() {
 }
 
 bool volume_changed() {
-  return new_volume != old_volume;
+  return new_volume + 5 < old_volume || new_volume - 5 > old_volume;
 }
 
 bool accel_changed() { 
@@ -171,26 +175,25 @@ bool accel_changed() {
 /*
  * turn signals into midi commands
  * and send out to synth
+ * 0 to 16,383
  */
 void send_midi_commands() {
-  old_pitch = new_pitch;
-  new_pitch = softpot_to_pitch();
-    
-  old_volume = new_volume;
-  new_volume = force_to_volume(); 
-
-  old_accel = new_accel;
-  new_accel = accel_to_indicator();
-
-  if (accel_changed()) {
-    if (new_accel = -1) {
-      program = 1;
-    } else {
-      program = 41;
+  if (i%10 == 0) {
+    if (new_accel == 1) {
+      pitch_bend = pitch_bend + 1000;
+      if (pitch_bend > 8192) {
+        pitch_bend = 8192;
+      }
+    } else if (new_accel == -1) {
+      pitch_bend = pitch_bend - 1000;
+      if (pitch_bend < 0) {
+        pitch_bend = 0;
+      }
     }
-    midi_program_change(CHANNEL, program);
+    midi_pitch_bend(CHANNEL, pitch_bend);
   }
-  
+
+      
   if (pitch_changed()) {
       midi_note_off(CHANNEL,new_pitch,127);
       midi_note_on(CHANNEL,new_pitch,new_volume);
@@ -210,9 +213,43 @@ void send_midi_commands() {
   }
 }
 
+void debounce() {  
+//  Serial.print("DEBOUNCE");
+//  bool midi = false;
+
+  bool consistent_pitch = true;
+  
+  int cur_pitch = softpot_to_pitch();
+  pot[pot_index] = cur_pitch;
+  pot_index = (pot_index + 1) % POT_THRESH;
+
+  for (int i = 0; i < POT_THRESH; i++) {
+    if (pot[i] != cur_pitch) {
+//      Serial.print("FALSE");
+      consistent_pitch = false;
+    }
+  }
+
+  if (consistent_pitch) {
+      old_pitch = new_pitch;
+      new_pitch = softpot_to_pitch(); 
+//      midi = true; 
+  }
+
+  old_volume = new_volume;
+  new_volume = force_to_volume(); 
+
+  old_accel = new_accel;
+  new_accel = accel_to_indicator();
+
+//  return midi;
+}
+
 void loop() {
   i++;
-  send_midi_commands();
-//  Serial.println("sent commands");
-  delay(1000); //response sensitivity
+  debounce();
+//  send_midi_commands();
+  
+  
+  delay(10); //response sensitivity
 }
