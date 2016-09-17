@@ -10,3 +10,6 @@ Hairless Midi
 http://projectgus.github.io/hairless-midiserial/
 
 Garageband (should already be on your mac)
+
+to connect garageband to hairless, make sure IAC driver is on
+(Audio MIDI setup on mac)
