@@ -56,8 +56,8 @@ void setup() {
  */
 int read_from_softpot() {
   int valSP = analogRead(SP_PIN)/580;
-  Serial.print("\t Potentiometer: ");
-  Serial.println(valSP); 
+//  Serial.print("\t Potentiometer: ");
+//  Serial.println(valSP); 
 
 // return i%8;
   return valSP;
@@ -68,8 +68,8 @@ int read_from_softpot() {
  */
 int read_from_force() {
   int valFS = analogRead(FS_PIN)/32;
-  Serial.print("Force: ");
-  Serial.println(valFS); 
+//  Serial.print("Force: ");
+//  Serial.println(valFS); 
 
 //  return 127;
 //  return i%5 * 30;
@@ -248,7 +248,7 @@ void debounce() {
 void loop() {
   i++;
   debounce();
-//  send_midi_commands();
+  send_midi_commands();
   
   
   delay(10); //response sensitivity
